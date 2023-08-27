@@ -2,29 +2,31 @@
 davidpreciado115@gmail.com
 
 
-## FORMACIÓN
+## EDUCATION
         
-Universidad Nacional Autónoma de México                                                Agosto, 2020 - Presente
-Licenciatura en Ciencias de la Computación                                                                                            CDMX, Mexico
-* Optativas de inteligencia artificial, ciencia de datos y aprendizaje de máquina
+### National Autonomous University of Mexico |                                                August, 2020 - Current
+BS, Computer Science | CDMX, Mexico
+* 4.0/4.0 GPA
+* AI, Machine Learning and Data Science electives
 
 
 
 
-## PROYECTOS ESCOLARES
-Base de datos en PostgreSQL para call center                                                            Diciembre, 2022
+
+## SCHOOL PROJECTS
+### PostgreSQL Database for Call Center                             |                               December, 2022
 * PostgreSQL
-* Diagramas entidad-relación, relacional
+* ER diagrams
 
 
-Transformador para identificación de samples                                                                                 Junio, 2023
+### Audio Spectrogram Transformer for Sample ID                            |                                                     June, 2023
 * Python, pytorch, huggingface, timm
 
 
-Plataforma automatizada de ventas para restaurante                                                                     Mayo, 2023
-* Diagramas entidad relación, relacional
-* Base de datos en SQLite
-* Diagramas de flujo
+### Self Service System for Restaurant               |                                                      Mayo, 2023
+* ER diagrams
+* SQLite database
+* Flow diagrams
 * Django, python, HTML, CSS
 
 
@@ -33,6 +35,6 @@ Plataforma automatizada de ventas para restaurante                              
 ## CERTIFICADOS, HABILIDADES E INTERESES
 
 
-* Certificados: TOEFL IBT (110/120)
-* Habilidades: Java, Python, Pytorch, PostgreSQL, Django, Clojure, Elixir, C, R, HTML, CSS, Javascript
-* Intereses: violín; guitarra; edición de video; gaming; ciencia ficción; cocina
+* Certificates: TOEFL IBT (110/120)
+* Skills: Java, Python, Pytorch, PostgreSQL, Django, Clojure, Elixir, C, R, HTML, CSS, Javascript
+* Interests: violin; guitar; video editing; gaming; science fiction; cooking
