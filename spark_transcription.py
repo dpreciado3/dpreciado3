@@ -1,67 +1,58 @@
+import io
 import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType
 
-# 1. Define the schema for the output DataFrame
 schema = StructType([
-    StructField("audio_path", StringType(), True),
+    StructField("path", StringType(), True),
     StructField("transcription", StringType(), True)
 ])
 
-def transcribe_batch(iterator):
-    """
-    This function runs on the Spark executors.
-    It initializes the model once per partition and processes files in batches.
-    """
+def transcribe_binary_batch(iterator):
     from faster_whisper import WhisperModel
-    import fsspec
     
-    # Initialize the model using INT8 quantization for CPU speed.
-    # cpu_threads should match your spark.task.cpus configuration (e.g., 4).
+    # Initialize model once per partition
     model = WhisperModel(
-        model_size_or_path="base", 
+        "base", 
         device="cpu", 
         compute_type="int8", 
         cpu_threads=4
     )
-    
+
     for pdf in iterator:
         transcriptions = []
-        for path in pdf['audio_path']:
+        for content in pdf['content']:
             try:
-                # fsspec allows reading directly from HDFS or other remote storage
-                # "rb" returns a binary file-like object which faster-whisper accepts natively
-                with fsspec.open(path, "rb") as f:
-                    segments, _ = model.transcribe(f, beam_size=5)
-                    text = " ".join([segment.text for segment in segments])
-                    transcriptions.append(text.strip())
+                # Wrap the raw bytes in a file-like object
+                audio_file = io.BytesIO(content)
+                
+                segments, _ = model.transcribe(audio_file, beam_size=5)
+                text = " ".join([s.text for s in segments])
+                transcriptions.append(text.strip())
             except Exception as e:
                 transcriptions.append(f"ERROR: {str(e)}")
-                
-        # Yield the results back to Spark as a Pandas DataFrame
+
         yield pd.DataFrame({
-            "audio_path": pdf['audio_path'],
+            "path": pdf['path'],
             "transcription": transcriptions
         })
 
 if __name__ == "__main__":
-    spark = SparkSession.builder.appName("WhisperCPUInference").getOrCreate()
+    spark = SparkSession.builder.appName("WhisperBinaryFile").getOrCreate()
 
-    # 2. Gather your file paths. 
-    # This could be reading a Hive table or dynamically listing HDFS directories.
-    # Example hardcoded paths:
-    paths = [
-        "hdfs://namenode:8020/data/audio/file1.wav", 
-        "hdfs://namenode:8020/data/audio/file2.wav"
-    ]
-    
-    # Create a Spark DataFrame of the paths
-    df = spark.createDataFrame(pd.DataFrame({"audio_path": paths}))
+    # 1. Use Spark's native binary reader
+    # This reads files into a DF with columns: [path, modificationTime, length, content]
+    raw_df = spark.read.format("binaryFile") \
+        .option("pathGlobFilter", "*.wav") \
+        .load("hdfs:///data/audio_folder/")
 
-    # 3. Apply the distributed inference UDF
-    transcribed_df = df.mapInPandas(transcribe_batch, schema=schema)
+    # 2. Select only the necessary columns to reduce memory shuffle
+    df = raw_df.select("path", "content")
 
-    # 4. Write the results back to your storage system (HDFS, Hive, etc.)
-    transcribed_df.write.mode("overwrite").parquet("hdfs://namenode:8020/data/output/transcriptions.parquet")
+    # 3. Process
+    results = df.mapInPandas(transcribe_binary_batch, schema=schema)
+
+    results.write.mode("overwrite").parquet("hdfs:///data/output_transcriptions")
     
     spark.stop()
+    
