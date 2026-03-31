@@ -1,58 +1,77 @@
-import io
-import pandas as pd
+import os
+import sys
+
+# 1. Path to your packed environment on HDFS
+# Format: hdfs:///path/to/env.tar.gz#alias
+HDFS_ENV_PATH = "hdfs:///user/your_name/envs/whisper_env.tar.gz#environment"
+
+# 2. Set environment variables for the Driver and Executors
+# These must be set BEFORE creating the SparkSession
+os.environ['PYSPARK_PYTHON'] = "./environment/bin/python"
+os.environ['PYSPARK_DRIVER_PYTHON'] = sys.executable  # Use current Jupyter kernel for driver
+
+# 3. Initialize Spark Session with YARN configurations
 from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("Whisper_Jupyter_Inference") \
+    .master("yarn") \
+    .config("spark.archives", HDFS_ENV_PATH) \
+    .config("spark.executorEnv.PYSPARK_PYTHON", "./environment/bin/python") \
+    .config("spark.yarn.appMasterEnv.PYSPARK_PYTHON", "./environment/bin/python") \
+    .config("spark.executor.cores", "4") \
+    .config("spark.task.cpus", "4") \
+    .config("spark.executor.memory", "8G") \
+    .config("spark.executor.memoryOverhead", "2G") \
+    .config("spark.executorEnv.OMP_NUM_THREADS", "1") \
+    .config("spark.executorEnv.MKL_NUM_THREADS", "1") \
+    .getOrCreate()
+
+# 4. Define the Processing Logic (Pandas UDF)
+import pandas as pd
 from pyspark.sql.types import StructType, StructField, StringType
 
 schema = StructType([
-    StructField("path", StringType(), True),
+    StructField("audio_path", StringType(), True),
     StructField("transcription", StringType(), True)
 ])
 
-def transcribe_binary_batch(iterator):
+def transcribe_batch(iterator):
     from faster_whisper import WhisperModel
+    import fsspec
     
-    # Initialize model once per partition
+    # Initialize model inside the worker
     model = WhisperModel(
         "base", 
         device="cpu", 
         compute_type="int8", 
         cpu_threads=4
     )
-
+    
     for pdf in iterator:
         transcriptions = []
-        for content in pdf['content']:
+        for path in pdf['audio_path']:
             try:
-                # Wrap the raw bytes in a file-like object
-                audio_file = io.BytesIO(content)
-                
-                segments, _ = model.transcribe(audio_file, beam_size=5)
-                text = " ".join([s.text for s in segments])
-                transcriptions.append(text.strip())
+                with fsspec.open(path, "rb") as f:
+                    segments, _ = model.transcribe(f, beam_size=5)
+                    text = " ".join([s.text for s in segments])
+                    transcriptions.append(text.strip())
             except Exception as e:
                 transcriptions.append(f"ERROR: {str(e)}")
-
+                
         yield pd.DataFrame({
-            "path": pdf['path'],
+            "audio_path": pdf['audio_path'],
             "transcription": transcriptions
         })
 
-if __name__ == "__main__":
-    spark = SparkSession.builder.appName("WhisperBinaryFile").getOrCreate()
+# 5. Execute on a sample
+# Replace with your actual HDFS directory or file list
+data = [{"audio_path": "hdfs:///data/audio/sample1.wav"}]
+df = spark.createDataFrame(data)
 
-    # 1. Use Spark's native binary reader
-    # This reads files into a DF with columns: [path, modificationTime, length, content]
-    raw_df = spark.read.format("binaryFile") \
-        .option("pathGlobFilter", "*.wav") \
-        .load("hdfs:///data/audio_folder/")
+results = df.mapInPandas(transcribe_batch, schema=schema)
 
-    # 2. Select only the necessary columns to reduce memory shuffle
-    df = raw_df.select("path", "content")
+# Show results or write to HDFS
+results.show(truncate=False)
 
-    # 3. Process
-    results = df.mapInPandas(transcribe_binary_batch, schema=schema)
-
-    results.write.mode("overwrite").parquet("hdfs:///data/output_transcriptions")
-    
-    spark.stop()
-    
+# spark.stop()
