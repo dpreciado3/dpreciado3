@@ -1,8 +1,8 @@
 # David Salvador Preciado Márquez
 
 Data Scientist | Machine Learning Engineer
-[davidpreciado115@gmail.com](mailto:davidpreciado115@gmail.com) • [GitHub](https://github.com/dpreciado3)
 
+[davidpreciado115@gmail.com](mailto:davidpreciado115@gmail.com)
 ---
 
 ## Technical Skills
